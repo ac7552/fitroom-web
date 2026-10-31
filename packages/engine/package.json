@@ -1,0 +1,19 @@
+{
+  "name": "@fitroom/engine",
+  "version": "0.1.0",
+  "description": "Fitroom's fitting room in the browser: sewing patterns from size charts, cloth draped on a body shaped from measurements, store photos read for colour and print, and the fit, part by part.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    "./assets/*": "./assets/*",
+    "./*": "./src/*.js"
+  },
+  "files": ["src", "vendor", "assets"],
+  "sideEffects": false,
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "three": "0.170.0"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "name": "fitroom-web",
+  "private": true,
+  "description": "Fitroom's front end: the 3D fitting room engine and the web page, apart from the Rails API.",
+  "license": "MIT",
+  "type": "module",
+  "workspaces": ["packages/*", "apps/*"],
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "dev": "npm run dev -w @fitroom/web",
+    "build": "npm run build -w @fitroom/web",
+    "preview": "npm run preview -w @fitroom/web",
+    "test": "npm test -w @fitroom/engine"
+  }
+}

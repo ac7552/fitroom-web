@@ -1,0 +1,20 @@
+{
+  "name": "@fitroom/web",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@fitroom/engine": "0.1.0",
+    "@hotwired/stimulus": "3.2.2",
+    "three": "0.170.0"
+  },
+  "devDependencies": {
+    "vite": "6.4.5"
+  }
+}
