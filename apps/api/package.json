@@ -1,0 +1,18 @@
+{
+  "name": "@fitroom/api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Fitroom's small API in Node: fits, size charts and the samples, so the page runs without the Rails app.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/api.js"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@fitroom/engine": "0.1.0"
+  }
+}

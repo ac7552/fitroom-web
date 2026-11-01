@@ -1,7 +1,8 @@
 import { cpSync, createReadStream, existsSync, statSync } from "node:fs"
-import { extname, join, normalize, resolve } from "node:path"
+import { extname, join, normalize, resolve, sep } from "node:path"
 import { fileURLToPath } from "node:url"
 import { defineConfig, loadEnv } from "vite"
+import { createApi } from "@fitroom/api"
 
 // The engine's 3D models (the mannequin, poses, studio light, textures) live in packages/engine/assets/models
 // and are served at /models: from there in development, copied into the build for production.
@@ -15,8 +16,9 @@ function engineModels() {
     configResolved(config) { outDir = resolve(config.root, config.build.outDir) },
     configureServer(server) {
       server.middlewares.use("/models", (req, res, next) => {
-        const file = normalize(join(MODELS, decodeURIComponent(req.url.split("?")[0])))
-        if (!file.startsWith(MODELS) || !existsSync(file) || !statSync(file).isFile()) return next()
+        let file
+        try { file = normalize(join(MODELS, decodeURIComponent(req.url.split("?")[0]))) } catch { return next() }
+        if (!file.startsWith(MODELS + sep) || !existsSync(file) || !statSync(file).isFile()) return next()
         res.setHeader("Content-Type", TYPES[extname(file)] ?? "application/octet-stream")
         createReadStream(file).pipe(res)
       })
@@ -25,16 +27,25 @@ function engineModels() {
   }
 }
 
+// The small Node API (apps/api) inside Vite's own server, so `npm run dev` is the whole app with no Rails.
+function smallApi() {
+  const mount = server => {
+    const api = createApi()
+    server.middlewares.use((req, res, next) => { api(req, res).then(handled => handled || next(), next) })
+  }
+  return { name: "fitroom-small-api", configureServer: mount, configurePreviewServer: mount }
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "")
+  // With FITROOM_API_PROXY set, /api goes to that server instead (the Rails app's bin/dev, on :3000), which
+  // also reads store links and runs the AI try-on.
+  const rails = env.FITROOM_API_PROXY
+  const proxy = rails ? { "/api": { target: rails, changeOrigin: true } } : undefined
   return {
-    plugins: [engineModels()],
-    // In development the page and the API share an address: /api goes to the Rails app (bin/dev on :3000).
-    server: {
-      port: 5173,
-      proxy: { "/api": { target: env.FITROOM_API_PROXY || "http://localhost:3000", changeOrigin: true } }
-    },
-    preview: { proxy: { "/api": { target: env.FITROOM_API_PROXY || "http://localhost:3000", changeOrigin: true } } },
+    plugins: [engineModels(), ...(rails ? [] : [smallApi()])],
+    server: { port: 5173, proxy },
+    preview: { proxy },
     build: { target: "es2022", chunkSizeWarningLimit: 1500 },
     worker: { format: "es" }
   }

@@ -66,7 +66,7 @@ export default class extends Controller {
     "heightFeet", "heightInches", "heightImperial", "heightMetric", "pantsOnly", "slider", "tuck",
     "bodyPhotoFront", "bodyPhotoSide", "bodyPhotoFrontLabel", "bodyPhotoSideLabel", "bodyPhotoButton", "bodyPhotoStatus", "bodyPhotoResult"
   ]
-  static values = { fitsUrl: String, importUrl: String, studioUrl: String, lookUrl: String, tryOnUrl: String, warmUrl: String, garment: Object, dress: Object }
+  static values = { fitsUrl: String, importUrl: String, studioUrl: String, lookUrl: String, tryOnUrl: String, warmUrl: String, garment: Object, dress: Object, samples: Object }
 
   connect() {
     this.unit = this.unitTargets.find(radio => radio.checked)?.value ?? "in"
@@ -1118,6 +1118,15 @@ export default class extends Controller {
 
   useDress() {
     this.addItem(structuredClone(this.dressValue))
+    this.update()
+  }
+
+  // One of the API's ready-made samples (its setup's samples, by name), for an API that can't read the sample
+  // pages as store links (the small Node API): the "try one of ours" buttons are pointed here (main.js).
+  useSampleGarment(event) {
+    const garment = this.samplesValue[event.params.sample]
+    if (!garment) return
+    this.addItem(structuredClone(garment))
     this.update()
   }
 

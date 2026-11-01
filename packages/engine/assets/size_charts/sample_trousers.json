@@ -1,0 +1,54 @@
+{
+  "name": "Sample trousers",
+  "garment": "trousers",
+  "style": "trousers",
+  "fabric": "wool",
+  "color": "#73777f",
+  "color_name": "Grey",
+  "source": "Made-up sample data, from the sample page apps/web/public/samples/grey-trousers.html (its inches in cm)",
+  "cut": {
+    "hem": "unfinished"
+  },
+  "sizes": [
+    {
+      "name": "30",
+      "waist": 78.7,
+      "seat": 99.1,
+      "thigh": 59.7,
+      "inseam": 86.4,
+      "leg_opening": 39.4
+    },
+    {
+      "name": "32",
+      "waist": 83.8,
+      "seat": 104.1,
+      "thigh": 62.2,
+      "inseam": 86.4,
+      "leg_opening": 40.6
+    },
+    {
+      "name": "34",
+      "waist": 88.9,
+      "seat": 109.2,
+      "thigh": 64.8,
+      "inseam": 86.4,
+      "leg_opening": 41.9
+    },
+    {
+      "name": "36",
+      "waist": 94.0,
+      "seat": 114.3,
+      "thigh": 67.3,
+      "inseam": 86.4,
+      "leg_opening": 43.2
+    },
+    {
+      "name": "38",
+      "waist": 99.1,
+      "seat": 119.4,
+      "thigh": 69.8,
+      "inseam": 86.4,
+      "leg_opening": 44.5
+    }
+  ]
+}

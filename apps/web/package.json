@@ -15,6 +15,7 @@
     "three": "0.170.0"
   },
   "devDependencies": {
-    "vite": "6.4.5"
+    "vite": "6.4.5",
+    "@fitroom/api": "0.1.0"
   }
 }
