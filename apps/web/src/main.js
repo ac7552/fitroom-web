@@ -9,8 +9,18 @@ import { loadSetup } from "./setup.js"
 
 configure({
   apiBase: import.meta.env.VITE_API_URL ?? "",
-  modelsBase: import.meta.env.VITE_MODELS_URL || "/models"
+  modelsBase: import.meta.env.VITE_MODELS_URL || "/models",
+  drapesBase: import.meta.env.VITE_DRAPES_URL || "/drapes"
 })
+
+// The vision service (the Rails repo's script/server/vision.mjs), when there is one: the engine reads its address
+// from this tag (garments/vision.js), as the Rails page writes it from FITROOM_VISION_URL. From the build's
+// VITE_VISION_URL here, or the API's setup (see startFittingRoom), before any store photo is read.
+function useVision(url) {
+  if (!url || document.querySelector('meta[name="fitroom-vision"]')) return
+  document.head.append(Object.assign(document.createElement("meta"), { name: "fitroom-vision", content: url }))
+}
+useVision(import.meta.env.VITE_VISION_URL)
 
 // Our sample pages, by the setup's sample each one is.
 const SAMPLE_PAGES = { "/samples/grey-t-shirt.html": "garment", "/samples/navy-suit-jacket.html": "jacket", "/samples/grey-trousers.html": "trousers" }
@@ -26,6 +36,7 @@ async function startFittingRoom() {
   const room = document.querySelector('[data-setup="fitting-room"]')
   if (!room) return
   const setup = await loadSetup(apiUrl("/api/v1/setup"))
+  useVision(setup.vision)
 
   const values = {
     fitsUrl: apiUrl("/api/v1/fits"),

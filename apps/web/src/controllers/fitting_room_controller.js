@@ -22,6 +22,10 @@ import { chartFromSizes, diagram, filled, nextSizeName, partsFor, sizesFromChart
 // and are kept nowhere: not on the server, not in cookies or browser storage. Inputs have no names, so
 // the browser never submits or remembers them, and a refresh clears them. Photos never leave the device.
 // Example numbers for each mannequin: an average man's and woman's.
+// Whether a print that can't be matched to its store photo holds the clothes behind a veil (strict), or the
+// fit is shown in plain colour and says so (the default).
+const LOOK_STRICT = typeof location !== "undefined" && new URLSearchParams(location.search).get("look") === "strict"
+
 const EXAMPLES_CM = {
   men: { chest: 101.6, waist: 86.4, shoulders: 45.5, arm: 65.5, height: 178, hips: 101, inseam: 81 },
   women: { chest: 91.5, waist: 74, shoulders: 39.5, arm: 58, height: 165, hips: 99, inseam: 76 }
@@ -281,7 +285,8 @@ export default class extends Controller {
           // keeps the graphics read off its back and sleeves.
           const dress = garment.style === "dress"
           if (dress || kind === "jacket" || kind === "coat" || ["shirt", "shortshirt"].includes(garment.style)) {
-            const map = (await readDressPhoto(frontPhoto).catch(() => null)) ?? (frontPhoto !== garment.photo ? await readDressPhoto(garment.photo).catch(() => null) : null)
+            const options = { flatten: dress, draped: dress && Boolean(garment.cut?.details?.includes("draping")) }
+            const map = (await readDressPhoto(frontPhoto, options).catch(() => null)) ?? (frontPhoto !== garment.photo ? await readDressPhoto(garment.photo, options).catch(() => null) : null)
             if (this.outfit[kind] !== item) return
             garment.photoMap = map ? { image: map.image, soft: map.soft, layout: map.layout, color: map.color } : null
             if (map) garment.print = null
@@ -456,7 +461,15 @@ export default class extends Controller {
   }
 
   // Three tries and none matched: the veil stays, saying so, with the two ways on.
+  // The print couldn't be matched to the store photo after three readings: the fit goes on in the cloth's
+  // plain colour, and says so (the sizes are right either way). With ?look=strict in the page's address,
+  // the veil stays up instead, with the choice of a plain look or the AI picture (for checking readings).
   lookStuck(garment) {
+    if (!LOOK_STRICT) {
+      this.lookStuckOn = garment
+      this.plainLook()
+      return
+    }
     this.lookStuckOn = garment
     this.setLookWords("We can't show this item's look accurately.")
     if (this.hasLoadingActionsTarget) this.loadingActionsTarget.hidden = false
@@ -1791,6 +1804,9 @@ export default class extends Controller {
       cuffTone: garment.cuffTone ?? null,
       photoSize: photoSize(garment.chart),
       photoMap: garment.photoMap ?? null,
+      // The store's photos (the front cleaned of a hand or a prop where it was), for re-draping (redrape.js).
+      photo: kind === "shoes" ? null : garment.lookPhotos?.front ?? garment.photo ?? null,
+      back_photo: kind === "shoes" ? null : garment.lookPhotos?.back ?? garment.back_photo ?? null,
       fabric: garment.fabric,
       style: garment.style,
       cut: garment.cut ?? null,

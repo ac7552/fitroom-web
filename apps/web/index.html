@@ -358,8 +358,10 @@
                 <label title="Brown"><input type="radio" name="tone" value="#7c4e31" autocomplete="off" data-action="fitting-room#changeTone"><span style="background: #7c4e31" aria-hidden="true"></span><span class="visually-hidden">Brown</span></label>
                 <label title="Deep"><input type="radio" name="tone" value="#4b2f20" autocomplete="off" data-action="fitting-room#changeTone"><span style="background: #4b2f20" aria-hidden="true"></span><span class="visually-hidden">Deep</span></label>
               </div>
-                <div class="studio-start" data-needs="try-on">
-                  <button type="button" class="studio-take" data-fitting-room-target="aiButton" data-action="fitting-room#aiPicture"
+                <div class="studio-start">
+                  <button type="button" class="studio-take" data-action="fitting-room#studioPhoto"
+                          title="A still photo of what's on screen, made on this device. With the studio program running on this computer, it's also finished to look like a studio shot, here too.">Take a photo</button>
+                  <button type="button" class="studio-take" data-needs="try-on" data-fitting-room-target="aiButton" data-action="fitting-room#aiPicture"
                           title="AI paints the stores' own photos of your clothes onto this picture. Only the picture and the stores' photos are sent, and nothing is kept.">Real clothes (AI)</button>
                 </div>
               <p class="stage-note" data-fitting-room-target="stageNote"></p>

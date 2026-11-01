@@ -12,8 +12,9 @@ app is still the full API: it also reads store links, passes store photos throug
 
 ```
 packages/engine   @fitroom/engine: pattern drafting, cloth simulation, photo reading, the 3D stage,
-                  the fit maths (fit.js), the fit bars and size editor, the 3D models (assets/models)
-                  and the sample size charts (assets/size_charts). No framework.
+                  the fit maths (fit.js), the fit bars and size editor, the 3D models (assets/models),
+                  the drape bank (assets/drapes) and the sample size charts (assets/size_charts).
+                  No framework.
 apps/api          @fitroom/api: the small Node API (no framework, no dependencies but the engine).
 apps/web          The Fitroom page: index.html, its Stimulus controllers and styles, built with Vite.
 ```
@@ -95,6 +96,22 @@ Rails app, which then lets the page's address use the API. `VITE_MODELS_URL` mov
 (about 14 MB) to a CDN too.
 
 The Rails app can keep serving its own page meanwhile; nothing there depends on this repo.
+
+## Keeping up with the fitroom repo
+
+The engine and page came from the fitroom repo's `app/javascript`, page template and CSS, and are kept in step
+with it: each change there is brought here with the same moves (paths, `lib/...` imports made relative) and
+merged three ways, so what's been changed here (config.js, the worker, the Node API's hooks) stays. Last
+brought over: fitroom `a819c5e` (the drape bank, redraping onto the shop's photos, sheer cloth, the vision
+service's client, the photo button).
+
+## The drape bank
+
+`packages/engine/assets/drapes` holds garments draped before (101 files, about 29 MB), served at `/drapes`. A
+garment near one of them starts from it rather than being sewn from flat (it's used when the drape runs on the
+page, not with `?drape=worker`; `?bank=off` turns it off). To add to it, open the page with `?bank=off` under
+`npm run dev`, load `/bank/build.js` in the console (its comment says how) and commit the files it saves: the
+Node API saves them in development only, as the Rails app does.
 
 ## Notes
 

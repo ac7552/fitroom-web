@@ -155,3 +155,28 @@ test("answers bad requests plainly", async () => {
   const huge = await fetch(`${base}/api/v1/fits`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pad: "x".repeat(1_100_000) }) })
   assert.equal(huge.status, 413)
 })
+
+test("saves drape bank entries in development only", async () => {
+  const { mkdtempSync, readFileSync } = await import("node:fs")
+  const { tmpdir } = await import("node:os")
+  const { join } = await import("node:path")
+  const dir = mkdtempSync(join(tmpdir(), "drapes-"))
+  const entry = { style: "tee", bodyType: "men", panels: "back,front,sleeve", measures: { chest: 104 }, item: { name: "Tee" }, points: [1, 2, 3] }
+  const serve = async api => {
+    const s = createServer(async (req, res) => { if (!(await api(req, res))) { res.writeHead(404); res.end() } })
+    await new Promise(resolve => s.listen(0, "127.0.0.1", resolve))
+    return s
+  }
+  const dev = await serve(createApi({ development: true, drapes: dir }))
+  const post = async (s, body) => fetch(`http://127.0.0.1:${s.address().port}/api/v1/drape_bank`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+  const saved = await post(dev, { entry, name: "men tee/104" })
+  assert.equal(saved.status, 200)
+  assert.deepEqual(await saved.json(), { file: "men-tee-104.json", entries: 1 })
+  assert.deepEqual(JSON.parse(readFileSync(join(dir, "men-tee-104.json"), "utf8")), entry)
+  await post(dev, { entry: { ...entry, measures: { chest: 106 } }, name: "men tee/104" })
+  const index = JSON.parse(readFileSync(join(dir, "index.json"), "utf8"))
+  assert.deepEqual(index, [{ file: "men-tee-104.json", style: "tee", bodyType: "men", panels: "back,front,sleeve", measures: { chest: 106 }, name: "Tee" }])
+  dev.close()
+  // Anywhere else (npm start, a preview of the build), there's nothing there.
+  assert.equal((await post(server, { entry, name: "x" })).status, 404)
+})

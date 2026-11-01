@@ -7,12 +7,14 @@
 // by the browser after that). The photo itself never leaves the page. Anything that goes wrong (no
 // network, an old browser, a mask that doesn't look like the garment) leaves the photo as it was.
 
-import { keepInside, loadImage, paintOut, pickMask, promptPoints } from "./print.js"
+import { keepInside, loadImage, paintOut, photoTraits, pickMask, promptPoints } from "./print.js"
+import { remoteMasks, visionUrl } from "./vision.js"
 
 const LIBRARY = "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.5.1"
 const MODEL = "Xenova/slimsam-77-uniform"
 const SIZE = 640    // the photo is segmented at about this many pixels across
 const FULL = 1600   // and painted out at up to this many
+const SKIN_SHARE = 0.002   // the share of the photo that's skin below which there's nothing to paint out
 
 let loading = null
 function load() {
@@ -52,15 +54,25 @@ async function clean(src, kind) {
   const pixels = context.getImageData(0, 0, w, h)
   const prompt = promptPoints(pixels.data, w, h, kind)
   if (!prompt) return src
+  // Only a hand or an arm is ever painted out (see keepInside), so a photo with no skin in it (a flat shot,
+  // a hanger) is left as it is, and skips the model's five seconds.
+  if (photoTraits(pixels.data, w, h).skin < SKIN_SHARE) return src
 
-  const { t, model, processor } = await load()
-  const raw = new t.RawImage(new Uint8ClampedArray(pixels.data), w, h, 4).rgb()
-  const inputs = await processor(raw, { input_points: [[prompt.points]], input_labels: [[prompt.points.map(() => 1)]] })
-  const outputs = await model(inputs)
-  const masks = await processor.post_process_masks(outputs.pred_masks, inputs.original_sizes, inputs.reshaped_input_sizes)
-  const scores = outputs.iou_scores.data
-  const all = masks[0]   // [1, 3, h, w]
-  const count = all.dims[1], plane = w * h, bits = all.data
+  // The model's masks: from the vision service when the server has one (vision.js), else the model here.
+  const plane = w * h
+  let bits, count, scores
+  const remote = visionUrl() ? await remoteMasks(pixels.data, w, h, prompt.points) : null
+  if (remote) ({ bits, count, scores } = remote)
+  else {
+    const { t, model, processor } = await load()
+    const raw = new t.RawImage(new Uint8ClampedArray(pixels.data), w, h, 4).rgb()
+    const inputs = await processor(raw, { input_points: [[prompt.points]], input_labels: [[prompt.points.map(() => 1)]] })
+    const outputs = await model(inputs)
+    const masks = await processor.post_process_masks(outputs.pred_masks, inputs.original_sizes, inputs.reshaped_input_sizes)
+    scores = outputs.iou_scores.data
+    const all = masks[0]   // [1, 3, h, w]
+    count = all.dims[1]; bits = all.data
+  }
 
   const best = pickMask(bits, count, plane, prompt.mask, scores)
   if (best < 0) return src

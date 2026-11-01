@@ -7,15 +7,20 @@
 //
 //   const handle = createApi()
 //   http.createServer(async (req, res) => { if (!(await handle(req, res))) { /* not an /api request */ } })
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { join } from "node:path"
 import { fitGuide, fitRequest } from "@fitroom/engine/fit"
 import { NotFound, allCharts, findChart } from "./charts.js"
 
 const MAX_BODY = 1_000_000   // bytes: a fit request is a few kilobytes
+const MAX_BANK_ENTRY = 20_000_000   // a drape bank entry: a draped garment's points
 
 // The samples the page's "try one of ours" offers, by the name its buttons use.
 const SAMPLES = { garment: "sample_t_shirt", dress: "sample_dress", jacket: "sample_suit_jacket", trousers: "sample_trousers" }
 
-export function createApi() {
+// development: also save drape bank entries (POST /api/v1/drape_bank, as the Rails app's DrapeBankController
+// does in development), into the folder `drapes` (the engine's assets/drapes). Never in production.
+export function createApi({ development = false, drapes = null } = {}) {
   const routes = [
     ["GET", /^\/api\/v1\/setup$/, () => ok({ try_on: false, imports: false, samples: Object.fromEntries(Object.entries(SAMPLES).map(([name, key]) => [name, findChart(key).asGarment()])) })],
     ["GET", /^\/api\/v1\/fit_guide$/, () => ok(fitGuide())],
@@ -24,7 +29,8 @@ export function createApi() {
     ["POST", /^\/api\/v1\/size_charts\/([^/]+)\/fits$/, async (req, [key]) => fit(await readJson(req), findChart(key))],
     ["POST", /^\/api\/v1\/fits$/, async req => fit(await readJson(req))],
     ["POST", /^\/api\/v1\/garment_imports$/, () => notHere("Adding clothes from a store link needs the full Fitroom server. Here, try one of our samples, or add the clothes by their sizes under \"Other ways to add clothes\".")],
-    ["GET", /^\/api\/v1\/garment_imports\/image$/, () => notHere("The store photo pass-through needs the full Fitroom server.")]
+    ["GET", /^\/api\/v1\/garment_imports\/image$/, () => notHere("The store photo pass-through needs the full Fitroom server.")],
+    ["POST", /^\/api\/v1\/drape_bank$/, async req => (development && drapes ? saveBankEntry(drapes, await readJson(req, MAX_BANK_ENTRY)) : { status: 404, body: { error: "not_found" } })]
   ]
 
   return async function handle(req, res) {
@@ -63,12 +69,28 @@ class BadRequest extends Error {
   constructor(status, code, message) { super(message); this.status = status; this.code = code }
 }
 
-async function readJson(req) {
+// Saves a drape bank entry (the engine's garments/drape_bank.js; apps/web/public/bank/build.js sends them) as
+// <name>.json in the bank's folder, and lists it in index.json. The files are then committed and served as
+// they are.
+function saveBankEntry(dir, { entry, name }) {
+  if (!entry || typeof entry !== "object" || Array.isArray(entry)) throw new BadRequest(422, "invalid", "Send the entry.")
+  const file = `${String(name ?? "").replace(/[^a-z0-9_-]/gi, "-") || "entry"}.json`
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(join(dir, file), JSON.stringify(entry))
+  let index = []
+  try { index = JSON.parse(readFileSync(join(dir, "index.json"), "utf8")) } catch {}
+  index = index.filter(meta => meta.file !== file)
+  index.push({ file, style: entry.style, bodyType: entry.bodyType, panels: entry.panels, measures: entry.measures, name: entry.item?.name })
+  writeFileSync(join(dir, "index.json"), JSON.stringify(index, null, 2))
+  return ok({ file, entries: index.length })
+}
+
+async function readJson(req, limit = MAX_BODY) {
   let size = 0
   const chunks = []
   for await (const chunk of req) {
     size += chunk.length
-    if (size > MAX_BODY) throw new BadRequest(413, "too_large", "That request is too big.")
+    if (size > limit) throw new BadRequest(413, "too_large", "That request is too big.")
     chunks.push(chunk)
   }
   const text = Buffer.concat(chunks).toString("utf8")

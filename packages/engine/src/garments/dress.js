@@ -7,6 +7,7 @@ import { placeCloth } from "./place.js"
 import { bottomsPhotoUV, dressPhotoUV, heightsDown, widthsAcross } from "./photo_map.js"
 import { Drape } from "./drape.js"
 import { BLANK_TEXTURE, clothMaterial, sheenTint } from "./fabric.js"
+import { sheerShow } from "./sheer.js"
 
 // Dressing the mannequin in a top cut from its pattern: the body as the cloth sees it, the drape run a few
 // frames at a time between redraws (so the page stays smooth and the cloth is seen settling), the garment's
@@ -271,6 +272,10 @@ export function dressDetails(item, pattern, cloth) {
       holes.push([["back"], 0, -(top + bottom) / 2, halfChest * 0.42, (bottom - top) / 2, false])
     }
     if (place === "front") holes.push([["front"], 0, -(m.frontNeck + 5), 2.5, 4, false])
+    // An asymmetrical cut-out in front: by the neck on the wearer's left (+x on the front).
+    if (place === "front_side") holes.push([["front"], 6, -(m.frontNeck + 3), 2, 3.5, false])
+    // A keyhole on the back: the same size, just below the back of the neck.
+    if (place === "back_keyhole") holes.push([["back"], 0, -(armhole * 0.3 + 3), 2.5, 4, false])
     if (place === "shoulders") holes.push([["sleeve_L", "sleeve_R"], 0, -7, m.bicep * 0.22, 5, false])
   }
   for (let i = 0; i < n; i++) {
@@ -444,6 +449,7 @@ export function sewingFor({ item, body, frame, field, measures }) {
   // crumpled); a skirt is laid on with its sides together, so it's closed as it's placed (see phases' weld),
   // eases a moment and hangs from its waistband.
   const skirt = bottoms && item.style === "skirt"
+  if (globalThis.__traceDrape) drape.trace = []
   const phases = skirt ? { settleFrames: 280, calmFrames: 60, relaxFrames: 12, weld: true }
     : bottoms ? { settleFrames: long ? 240 : 160, calmFrames: 60, sewGravity: 0, heavyFrames: drape.snug ? 0 : 60 }
     : long ? { settleFrames: 280, calmFrames: 60, sewGravity: holds ? 0 : 0.4, heavyFrames: item.style === "coat" ? 60 : 0 } : { settleFrames: 140, calmFrames: 45 }
@@ -462,6 +468,7 @@ export class DrapedTop {
     this.pattern = sewing.pattern
     this.cloth = sewing.cloth
     this.drape = sewing.drape
+    this.phaseMs = {}
     this.steps = sewing.steps
     this.frames = 0
     this.expected = sewing.expected
@@ -482,6 +489,8 @@ export class DrapedTop {
   // (this.remote, remote_drape.js's job), it takes the worker's newest points instead.
   advance(budget = 10) {
     if (this.done) return false
+    // (Waiting on the drape bank: a moment, then it starts from there or from scratch.)
+    if (this.banking) return true
     // (The worker failed: it's sewn here, from where it got to.)
     if (this.remote?.failed) this.remote = null
     const remote = this.remote
@@ -512,8 +521,10 @@ export class DrapedTop {
       return !this.done
     }
     const end = performance.now() + budget
+    let now = performance.now()
     do {
       const next = this.steps.next()
+      const after = performance.now()
       if (next.done) {
         this.done = true
         this.shade()
@@ -521,7 +532,10 @@ export class DrapedTop {
       }
       this.phase = next.value
       this.frames++
-    } while (performance.now() < end)
+      // How long each phase takes (milliseconds), for timing the drape.
+      this.phaseMs[this.phase] = (this.phaseMs[this.phase] ?? 0) + (after - now)
+      now = after
+    } while (now < end)
     this.update()
     return !this.done
   }
@@ -573,9 +587,8 @@ export class DrapedTop {
     const details = {
       stitch: knit ? "hem" : "topstitch", closure: pattern.closure, pocket: item.style === "hoodie" ? "kangaroo" : null,
       neckDepth: pattern.measures.frontNeck, length: pattern.measures.length,
-      // How much of a sheer cloth's colour shows: most of it, semi-sheer (it reads as the cloth's colour in a
-      // photo, the skin only hinted); less, sheer; but a printed sheer one's print is what's seen.
-      sheer: item.cut?.sheer ? (item.cut.sheer_kind === "semi" ? 0.9 : item.cut.printed ? 0.82 : 0.65) : 1,
+      // How much of a sheer cloth's colour shows (see sheerShow).
+      sheer: item.cut?.sheer ? sheerShow(item.color, item.cut.sheer_kind, item.cut.printed) : 1,
       // A puffer's quilted baffles (see fabric.js's QUILT).
       quilt: Boolean(item.puffer)
     }
@@ -601,6 +614,8 @@ export class DrapedTop {
       this.materials[key].sheenColor.copy(sheenTint(color))
       this.materials[key].userData.uniforms.uThread.value.set(color).offsetHSL(0, 0, 0.07)
     }
+    const cut = this.item.cut
+    if (cut?.sheer && this.materials.main.userData.uniforms.uSheer) this.materials.main.userData.uniforms.uSheer.value = sheerShow(color, cut.sheer_kind, cut.printed)
   }
 
   // A print from the shop's photo (print.js's readPhoto; null for none), laid on the front; and back: the
@@ -713,17 +728,20 @@ export class DrapedTop {
   // Pants' or a skirt's shop photo (print.js's readBottomPhoto: { image, soft, layout }; null for none),
   // laid on the cloth: the photo on the front, its softened copy on the back. A dress's the same way
   // (print.js's readDressPhoto, its layout marked dress).
+  // A re-draped photo (redrape.js) comes with its own texture coordinates (map.uv) and the back photo as
+  // map.back.image; the front image serves for the softened copy too.
   setPhotoMap(map) {
-    if (!this.bottoms && !map?.layout?.dress) map = null
-    if (map?.image === this.photoImage) return
+    if (!this.bottoms && !map?.layout?.dress && !map?.uv) map = null
+    if (map?.image === this.photoImage && map?.uv === this.photoUV) return
     this.photoImage = map?.image ?? null
+    this.photoUV = map?.uv ?? null
     for (const texture of this.photoTextures ?? []) texture.dispose()
     this.photoTextures = []
     if (map) {
-      const uv = map.layout.dress ? dressPhotoUV(this.cloth, this.pattern, map.layout) : bottomsPhotoUV(this.cloth, this.pattern, map.layout, map.back?.layout ?? null)
+      const uv = map.uv ?? (map.layout.dress ? dressPhotoUV(this.cloth, this.pattern, map.layout) : bottomsPhotoUV(this.cloth, this.pattern, map.layout, map.back?.layout ?? null))
       this.geometry.attributes.aPhoto.array.set(uv)
       this.geometry.attributes.aPhoto.needsUpdate = true
-      this.photoTextures = [map.image, map.soft, map.back?.image ?? map.soft].map(canvas => {
+      this.photoTextures = [map.image, map.soft ?? map.image, map.back?.image ?? map.soft ?? map.image].map(canvas => {
         const texture = new THREE.CanvasTexture(canvas)
         texture.colorSpace = THREE.SRGBColorSpace
         texture.anisotropy = 8
